@@ -1,0 +1,268 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="style.css">
+    <style>
+        canvas {
+            border: 1px solid #d3d3d3;
+            background-color: #f1f1f1;
+            padding-left: 0;
+            padding-right: 0;
+            margin-left: auto;
+            margin-right: auto;
+            display: block;
+        }
+    </style>
+</head>
+<body onload="startGame()">
+    <script src="Objects.js"></script>
+    <script src="Controls.js"></script>
+    <script src="Stats.js"></script>
+    <script src="Rules.js"></script>
+    <script src="Collisions.js"></script>
+    <script src="Login.js"></script>
+    <script>
+
+        var player;
+        var horizontalPlatform;
+        var myBallArray = [];
+        var tilesArray = [];
+        let ctx;
+        var background = new Image();
+
+        var lowest = 150;
+        var countB = 0;
+        var verticalPlatform = null;
+        var mode = false;
+        var block;
+        var bonusArray = [];
+        var isX2Active = false;
+        var x2Timer;
+        var isX5Active = false;
+        var x5Timer;
+        var startingSize;
+        var isSizeUpgrActive = false;
+        var sizeUpgrTimer;
+        var isSizeDwngrActive = false;
+        var sizeDwngTimer;
+        var isDirectionsActive = false;
+        var dirTimer;
+
+        var score = 0;
+        var time;
+
+        var tempBallSpeedX = [];
+        var tempBallSpeedY = [];
+        var keyPressed = false;
+        var gamePaused = false;
+
+        var simpleAI = false;
+
+        function startGame() {
+            background.src = "background.jpg";
+            document.getElementById('buttons').style.display = 'none';
+            if (confirm("Do want to turn on the AI?")) {
+                simpleAI = true;
+            }
+            player = "Guest";
+
+            if (confirm("Do you want additional layers of tiles showing up or should tiles just fill the gaps?")) {
+                mode = true;
+            }
+
+            if (confirm('Do you want second, vertical platform?')) {
+                verticalPlatform = new platformVertical(23, 128, 0, 300);
+                document.getElementById('upButton').style.display = 'none';
+                document.getElementById('downButton').style.display = 'none';
+            }
+            else {
+                document.getElementById('upButton').style.display = 'none';
+                document.getElementById('downButton').style.display = 'none';
+            }
+            time = 0;
+            horizontalPlatform = new platformHorizontal(128, 23, 256, 457);
+            startingSize = horizontalPlatform.width;
+            myBallArray.push(new ball());
+            let counter = 0;
+            for (let i = 50; i < 130; i = i + 21) {
+                for (let j = 65; j < 575; j = j + 51) {
+                    tilesArray.push(new tile(j, i));
+                    counter++;
+                }
+            }
+            myGameArea.start();
+            pause();
+        }
+
+        var myGameArea = {
+            canvas: document.createElement("canvas"),
+            start: function () {
+                this.canvas.width = 640;
+                this.canvas.height = 480;
+                this.context = this.canvas.getContext("2d");
+                document.body.insertBefore(this.canvas, document.body.childNodes[0]);
+                this.interval = setInterval(updateGameArea, 20);
+                this.timerInterval = setInterval(timer, 1000);
+                window.addEventListener('keydown', function (e) {
+                    myGameArea.key = e.keyCode;
+                    keyPressed = true;
+                })
+                window.addEventListener('keyup', function (e) {
+                    myGameArea.key = false;
+                })
+            },
+            clear: function () {
+                this.context.globalAlpha = 0.4;
+                this.context.drawImage(background, 0, 0);
+                this.context.globalAlpha = 1;
+            }
+        }
+
+        function updateGameArea() {
+            myGameArea.clear();
+            if (gamePaused) {
+                horizontalPlatform.speedX = 0;
+                if (verticalPlatform) {
+                    verticalPlatform.speedY = 0;
+                }
+                myGameArea.context.font = (myGameArea.context.canvas.width / 16).toString() + "px Helvetica";
+                myGameArea.context.textAlign = "center";
+                myGameArea.context.fillStyle = "white";
+                myGameArea.context.fillText("Game is paused", myGameArea.canvas.width / 2, myGameArea.canvas.height / 2 - 20);
+                myGameArea.context.fillText("Press start", myGameArea.canvas.width / 2, myGameArea.canvas.height / 2 + 20);
+            }
+            if (simpleAI) {
+                if (Math.abs(myBallArray[0].x - (horizontalPlatform.x + horizontalPlatform.width / 2)) > 5) {
+                    if (myBallArray[0].x < horizontalPlatform.x + horizontalPlatform.width / 2) {
+                        moveleft();
+                    } else if (myBallArray[0].x > horizontalPlatform.x + horizontalPlatform.width / 2) {
+                        moveright();
+                    }
+                }
+            }
+            else {
+                if (myGameArea.key) {
+                    if (myGameArea.key == 37) { moveleft(); }
+                    if (myGameArea.key == 39) { moveright(); }
+                    if (myGameArea.key == 38) { moveup(); }
+                    if (myGameArea.key == 40) { movedown(); }
+                }
+                else {
+                    if (keyPressed) {
+                        clearmove();
+                        keyPressed = false;
+                    }
+                }
+            }
+
+            checkObjectsCollision();
+            addBall();
+            checkForActiveBonus();
+            checkBonusTimers();
+            deleteBall();
+            gamemodeRules();
+            displayScore();
+            displayTime();
+            if (myBallArray.length <= 0) {
+                gameOver();
+            }
+        }
+
+        function openLoginForm() {
+            document.getElementById("myLoginForm").style.display = "block";
+            document.getElementById("myRegisterForm").style.display = "none";
+        }
+
+        function closeLoginForm() {
+            document.getElementById("myLoginForm").style.display = "none";
+        }
+
+        function openRegisterForm() {
+            document.getElementById("myRegisterForm").style.display = "block";
+            document.getElementById("myLoginForm").style.display = "none";
+        }
+
+        function closeRegisterForm() {
+            document.getElementById("myRegisterForm").style.display = "none";
+        }
+
+        function tryLogin() {
+            var username = document.getElementById("loginUsername");
+            var pswd = document.getElementById("loginPassword");
+
+            var myWorker = new Worker('Login.js');
+            myWorker.postMessage([username, pswd]);
+            myWorker.onmessage = function (e) {
+                var result = e.data;
+            }
+        }
+
+    </script>
+
+    <div class="form-popup" id="myLoginForm">
+        <form class="form-container">
+            <h1>Login</h1>
+
+            <label for="email"><b>Login</b></label>
+            <input id="loginUsername" type="text" placeholder="Enter Username" name="login" required>
+
+            <label for="psw"><b>Password</b></label>
+            <input id="loginPassword" type="password" placeholder="Enter Password" name="password" required>
+
+            <button type="submit" class="btn" onclick="tryLogin()">Login</button>
+            <button type="button" class="btn cancel" onclick="closeLoginForm()">Close</button>
+        </form>
+    </div>
+
+    <div class="form-popup" id="myRegisterForm">
+        <form action="/action_page.php" class="form-container">
+            <h1>Register</h1>
+
+            <label for="email"><b>Email</b></label>
+            <input type="text" placeholder="Enter Username" name="username" required>
+
+            <label for="psw"><b>Password</b></label>
+            <input type="password" placeholder="Enter Password" name="psw" required>
+
+            <label for="psw"><b>Repeat password</b></label>
+            <input type="password" placeholder="Enter Password" name="psw2" required>
+
+            <button type="submit" class="btn">Register</button>
+            <button type="button" class="btn cancel" onclick="closeRegisterForm()">Close</button>
+        </form>
+    </div>
+
+    <div style="font-size: large; text-align:center;">
+        SCORE: <span id="displayCurrentScore">0</span>
+    </div>
+    <div style="font-size: large; text-align:center;">
+        TIME: <span id="displayGameTime">0</span>
+    </div>
+    <div style="text-align:center;width:auto;" id="upButton">
+        <button style="width: 100px" onmousedown="moveup()" onmouseup="clearmove()" ontouchstart="moveup()">UP</button>
+    </div>
+    <div style="text-align:center;width:auto;" id="buttons">
+        <button style="width: 100px" onmousedown="moveleft()" onmouseup="clearmove()" ontouchstart="moveleft()">LEFT</button>
+        <button style="width: 100px" onmousedown="moveright()" onmouseup="clearmove()" ontouchstart="moveright()">RIGHT</button>
+    </div>
+    <div style="text-align:center;width:auto;" id="downButton">
+        <button style="width: 100px" onmousedown="movedown()" onmouseup="clearmove()" ontouchstart="movedown()">DOWN</button>
+    </div><br><br>
+    <div style="text-align:center;width:auto;">
+        <button style="width: 100px" onclick="pause()">PAUSE</button>
+        <button style="width: 100px" onclick="start()">START</button><br><br>
+    </div><br>
+    <div style="text-align:center;width:auto;" id="showStats">
+        <button style="width: 100px" onclick="showStats()">STATS</button>
+    </div>
+
+    <div class="btn-group" style="text-align:center">
+        <p>Menu</p>
+        <button onclick="openLoginForm()">Login</button>
+        <button onclick="openRegisterForm()">Register</button>
+        <button>Upload Score</button>
+        <button>Download Score</button>
+    </div>
+</body>
+</html>
